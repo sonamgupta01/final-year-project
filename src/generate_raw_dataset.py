@@ -78,27 +78,46 @@ def extract_metrics(output_file):
     try:
         with open(output_file, 'r') as f:
             content = f.read()
-        
+
         metrics = {}
-        
+
         match = re.search(r'Packet latency average\s*=\s*([\d.]+)', content)
         if match:
             metrics['avg_latency'] = float(match.group(1))
-        
+
         match = re.search(r'Network latency average\s*=\s*([\d.]+)', content)
         if match:
             metrics['network_latency'] = float(match.group(1))
-        
+
         match = re.search(r'Accepted flit rate average\s*=\s*([\d.]+)', content)
         if match:
             metrics['throughput'] = float(match.group(1))
-        
+
         match = re.search(r'Injected flit rate average\s*=\s*([\d.]+)', content)
         if match:
             metrics['network_load'] = float(match.group(1))
-        
+
         metrics['unstable'] = 'unstable' in content.lower() or 'exceeded' in content.lower()
-        
+
+        # Extract per-node metrics
+        node_metrics = {}
+        # Look for lines like "Router 0: latency = 50.5, throughput = 0.95" or variations
+        router_patterns = [
+            re.compile(r'Router\s+(\d+):\s*latency\s*=\s*([\d.]+),\s*throughput\s*=\s*([\d.]+)'),
+            re.compile(r'Router\s+(\d+)\s*latency:\s*([\d.]+)\s*throughput:\s*([\d.]+)'),
+            re.compile(r'router\s+(\d+).*?latency.*?([\d.]+).*?throughput.*?([\d.]+)', re.IGNORECASE),
+        ]
+        for pattern in router_patterns:
+            for match in pattern.finditer(content):
+                node_id = int(match.group(1))
+                latency = float(match.group(2))
+                throughput = float(match.group(3))
+                node_metrics[node_id] = {'latency': latency, 'throughput': throughput}
+            if node_metrics:
+                break
+
+        metrics['node_metrics'] = node_metrics
+
         return metrics
     except Exception as e:
         print(f"    Error extracting metrics: {e}")
@@ -139,6 +158,7 @@ def generate_scenario_samples(config_file, scenario_name, params_list, start_idx
                 'avg_latency': round(metrics.get('avg_latency', 0), 2),
                 'network_latency': round(metrics.get('network_latency', 0), 2),
                 'unstable': 1 if metrics.get('unstable', False) else 0,
+                'node_metrics': metrics.get('node_metrics', {}),
                 # No pre-defined hotspot labels - will be detected later
             })
             
@@ -287,8 +307,9 @@ def main():
     print(f"\n✓ Raw dataset saved: {os.path.abspath(output_csv)}")
     print(f"  Columns: step, traffic_pattern, injection_rate, network_load,")
     print(f"            throughput, avg_latency, network_latency, unstable,")
-    print(f"            hotspot_detected, congestion_score")
+    print(f"            hotspot_detected, congestion_score, hotspot_nodes")
     print(f"  NATURAL HOTSPOT DETECTION: Based on latency and throughput analysis")
+    print(f"  NODE-LEVEL HOTSPOTS: Identified based on per-node latency thresholds")
     print(f"  NO MANUAL HOTSPOT FORCING: All patterns are natural BookSim traffic")
     print(f"  Next step: Run train_lstm_model.py to train on this naturally labeled dataset")
 
@@ -300,27 +321,27 @@ def detect_natural_hotspots(df):
     print(f"\n{'='*70}")
     print(" NATURAL HOTSPOT DETECTION")
     print(f"{'='*70}")
-    
+
     # Calculate congestion score based on multiple metrics
     df = df.copy()
-    
+
     # Normalize metrics for scoring (higher latency = worse, lower throughput = worse)
     df['latency_score'] = (df['avg_latency'] - df['avg_latency'].min()) / (df['avg_latency'].max() - df['avg_latency'].min())
     df['throughput_score'] = 1 - ((df['throughput'] - df['throughput'].min()) / (df['throughput'].max() - df['throughput'].min()))
     df['load_efficiency'] = df['throughput'] / (df['network_load'] + 1e-6)  # Avoid division by zero
     df['efficiency_score'] = 1 - ((df['load_efficiency'] - df['load_efficiency'].min()) / (df['load_efficiency'].max() - df['load_efficiency'].min()))
-    
+
     # Combined congestion score (0-1, higher = more congested)
     df['congestion_score'] = (0.4 * df['latency_score'] +
-                             0.3 * df['throughput_score'] +
-                             0.2 * df['efficiency_score'] +
-                             0.1 * df['unstable'])
-    
+                              0.3 * df['throughput_score'] +
+                              0.2 * df['efficiency_score'] +
+                              0.1 * df['unstable'])
+
     # Detect hotspots using statistical thresholds
     # Use 75th percentile as threshold for hotspot detection
     congestion_threshold = df['congestion_score'].quantile(0.75)
     latency_threshold = df['avg_latency'].quantile(0.80)  # Top 20% latency
-    
+
     # A sample is considered a hotspot if:
     # 1. High congestion score (top 25%)
     # 2. High latency (top 20%)
@@ -329,17 +350,31 @@ def detect_natural_hotspots(df):
         (df['congestion_score'] >= congestion_threshold) &
         (df['avg_latency'] >= latency_threshold)
     ) | (df['unstable'] == 1)
-    
+
     # Convert boolean to int for consistency
     df['hotspot_detected'] = df['hotspot_detected'].astype(int)
-    
+
+    # Node-level hotspot detection
+    def detect_node_hotspots(row):
+        if not row['node_metrics']:
+            return ''
+        latencies = [node['latency'] for node in row['node_metrics'].values()]
+        if not latencies:
+            return ''
+        # Use 75th percentile of node latencies as threshold
+        threshold = np.percentile(latencies, 75)
+        hotspot_nodes = [node_id for node_id, metrics in row['node_metrics'].items() if metrics['latency'] >= threshold]
+        return ','.join(map(str, sorted(hotspot_nodes)))
+
+    df['hotspot_nodes'] = df.apply(detect_node_hotspots, axis=1)
+
     print(f"Congestion score threshold: {congestion_threshold:.3f}")
     print(f"Latency threshold: {latency_threshold:.1f}")
     print(f"Hotspots detected: {df['hotspot_detected'].sum()} / {len(df)} samples")
-    
+
     # Clean up temporary columns
-    df = df.drop(['latency_score', 'throughput_score', 'load_efficiency', 'efficiency_score'], axis=1)
-    
+    df = df.drop(['latency_score', 'throughput_score', 'load_efficiency', 'efficiency_score', 'node_metrics'], axis=1)
+
     return df
 
 if __name__ == "__main__":
