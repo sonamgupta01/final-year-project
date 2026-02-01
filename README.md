@@ -170,6 +170,57 @@ Hotspot = Top 20% density windows
 📊 Visualization: density_evolution.png
 ```
 
+
+### Phase-2: Hotspot Prediction & Adaptive Rerouting (Newly Added)
+
+In Phase-2, the project is extended from hotspot detection to hotspot prediction and mitigation using a software-only approach.
+
+**1. Continuous Hotspot Prediction (WHEN)**
+A trained LSTM model is used to predict whether a hotspot will occur in the next time window.
+The dataset is analyzed using fixed sliding windows of 10 timesteps (e.g., 1–10, 11–20, …).
+For each window, the model outputs:
+Hotspot probability
+Classification: HOTSPOT / NO HOTSPOT
+Severity level: Mild / Moderate / Severe
+This enables early prediction, before congestion becomes critical.
+
+**2. Hotspot Localization (WHERE)**
+When a hotspot is predicted, the system identifies which nodes are likely to be congested.
+Node identification is based on traffic pattern–aware analysis (e.g., transpose, shuffle, tornado, bit-complement).
+This makes the prediction explainable and defensible, rather than random.
+
+**3. Hotspot-Aware Adaptive Rerouting**
+Rerouting is applied only for windows where a hotspot is detected.
+A local, software-based rerouting policy is used:
+Hotspot nodes are avoided
+Traffic is redistributed to low-load neighboring nodes
+Traffic redistribution strategy:
+60% traffic rerouted
+40% traffic kept on original path
+Load is split across multiple neighbors to prevent secondary congestion.
+
+**4. Post-Rerouting Congestion Verification**
+After rerouting, congestion is re-evaluated.
+A reduced congestion probability confirms that rerouting helped:
+Status reported as CONGESTION REDUCED
+This provides a closed-loop feedback mechanism.
+
+**5. Summary & Monitoring**
+The system prints:
+Total windows analyzed
+Number of hotspot and non-hotspot windows
+Severity distribution
+Hotspots by traffic pattern
+This demonstrates real-time monitoring with intelligent decision-making.
+
+
+### ✔ Phase-2 Outcome
+
+Phase-2 successfully transforms the project from passive hotspot detection into an active, predictive, and corrective NoC traffic management framework, fully implemented in software without any hardware modification.
+
+
+
+
 ### Sample Visualizations
 
 #### BookSim Congestion Evolution
@@ -192,6 +243,7 @@ noc-hotspot-detection/
 ├── booksim_dataset_raw.csv        # Generated dataset
 ├── lstm_hotspot_model.h5          # Trained model
 ├── lstm_training_history.png      # Training visualization
+|── predict_hotspot.py             # prediction and rerouting
 ├── booksim_congestion_evolution.png # BookSim analysis plot
 ├── external_density_evolution.png  # External analysis plot
 ├── Temp1A.txt                     # Sample external trace
@@ -286,6 +338,18 @@ This framework addresses key research gaps in NoC congestion analysis:
 - Chip multiprocessor performance analysis
 
 ---
+
+### Running project 
+**phase 1**
+source noc_env/bin/activate
+python src/main.py
+**phase 2**
+open other terminal
+source noc_env/bin/activate
+python predict_hotspot.py
+
+
+
 
 ⭐ **If you find this project useful, please give it a star!**
 
