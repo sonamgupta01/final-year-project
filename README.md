@@ -348,7 +348,9 @@ open other terminal
 source noc_env/bin/activate
 python predict_hotspot.py
 
-
+open other terminal (To see the result after rerouting)
+source noc_env/bin/activate
+python external_hotspot.py
 
 
 ⭐ **If you find this project useful, please give it a star!**
