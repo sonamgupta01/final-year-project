@@ -219,16 +219,6 @@ This demonstrates real-time monitoring with intelligent decision-making.
 Phase-2 successfully transforms the project from passive hotspot detection into an active, predictive, and corrective NoC traffic management framework, fully implemented in software without any hardware modification.
 
 
-
-
-### Sample Visualizations
-
-#### BookSim Congestion Evolution
-![Congestion Evolution](booksim_congestion_evolution.png)
-
-#### External Trace Density Analysis
-![Density Evolution](external_density_evolution.png)
-
 ## 📁 Project Structure
 
 ```
@@ -351,6 +341,13 @@ python predict_hotspot.py
 open other terminal (To see the result after rerouting)
 source noc_env/bin/activate
 python external_hotspot.py
+
+<img width="1005" height="965" alt="image" src="https://github.com/user-attachments/assets/8cbda547-39de-492a-b3bb-6ecc460203dd" />
+<img width="1005" height="856" alt="image" src="https://github.com/user-attachments/assets/81498c6d-837c-4204-9ae0-fa73337b1f0a" />
+<img width="1334" height="861" alt="image" src="https://github.com/user-attachments/assets/6f1656dc-cf87-436a-b0c8-d94861564725" />
+<img width="1334" height="890" alt="image" src="https://github.com/user-attachments/assets/2d5f3439-d3c6-4e33-800c-514fa44a071e" />
+
+
 
 
 ⭐ **If you find this project useful, please give it a star!**
